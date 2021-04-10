@@ -2,6 +2,10 @@
 Simulations from https://docs.q-ctrl.com/boulder-opal/application-notes/q-ctrl-qchack-challenge
 '''
 
+import matplotlib.pyplot as plt
+import numpy as np
+from qctrlopencontrols import new_corpse_control, new_primitive_control
+from qctrlvisualizer import plot_controls
 
 def simulate_ideal_qubit(
     duration=1, values=np.array([np.pi]), shots=1024, repetitions=1
