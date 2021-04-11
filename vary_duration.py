@@ -8,6 +8,8 @@ import numpy as np
 from qctrlvisualizer import get_qctrl_style, plot_controls
 from typing import List, Tuple
 
+from scipy.optimize import curve_fit
+
 qctrl = Qctrl(email=os.getenv('EMAIL'), password=os.getenv('PASSWORD'))
 
 
@@ -20,6 +22,10 @@ def estimate_probability_of_one(measurements):
 
 def get_qubit_population(pulse_duration: float, control_count: int = 1, a_i: float = 0, a_q: float = 0) -> List[
     Tuple[float, float]]:
+    """
+    Gets the qubit population that corresponds to a certain pulse_duration and pulse (a_i, a_q)
+    :return: a list of qubit populations (probability, standard_error)
+    """
     segment_count = 16
     shot_count = 32
 
@@ -29,7 +35,6 @@ def get_qubit_population(pulse_duration: float, control_count: int = 1, a_i: flo
         real_part = np.ones(segment_count) * a_i
         imag_part = np.ones(segment_count) * a_q
         values = 0.15 * k * (real_part + 1j * imag_part)
-
         controls.append({"duration": pulse_duration, "values": values})
 
     # Obtain the results of the experiment.
@@ -41,11 +46,51 @@ def get_qubit_population(pulse_duration: float, control_count: int = 1, a_i: flo
     qubit_population = []
     experiment_measurements = experiment_results.measurements
     for k, measurement_counts in enumerate(experiment_measurements):
-        print(f"control #{k}: {measurement_counts}")
-        print(estimate_probability_of_one(measurement_counts))
+        # print(f"control #{k}: {measurement_counts}")
+        # print(estimate_probability_of_one(measurement_counts))
         qubit_population.append(estimate_probability_of_one(measurement_counts))
 
     return qubit_population
 
 
-print(get_qubit_population(30, 1, 1, 0))
+duration_interval = 5
+min_duration = 10
+max_duration = 70
+pulse_durations = np.arange(min_duration, max_duration, duration_interval).tolist()
+a_i = 0.2  # pulse amplitude (real)
+
+qubit_populations = []
+
+for pulse_duration in pulse_durations:
+    probability, standard_error = get_qubit_population(pulse_duration, control_count=1, a_i=a_i, a_q=0)[0]
+    qubit_populations.append(probability)
+
+plt.plot(pulse_durations, qubit_populations, 'o')
+
+def fit_function_bounds(x_values, y_values, function, bound_values):
+    fitparams, conv = curve_fit(function, x_values, y_values, bounds=bound_values)
+    y_fit = function(x_values, *fitparams)
+    return fitparams, y_fit
+
+
+fit_parameters, y_fit = fit_function_bounds(
+    np.array(pulse_durations),
+    np.array(qubit_populations),
+    lambda x, A, rabi_freq, phi: A * np.cos(2 * np.pi * rabi_freq * x + phi) ** 2,
+    (
+        [0.8, np.abs(a_i * 8 * 1e7), -4],
+        [1, np.abs(a_i * 11 * 1e7), 4],
+    ),
+    )
+
+print("Drive amplitude:", a_i)
+print("Fitted Rabi frequency [Hz]:", fit_parameters[1])
+
+plt.plot(
+    pulse_durations,
+    fit_parameters[0]
+    * np.cos(2 * np.pi * fit_parameters[1] * np.array(pulse_durations) + fit_parameters[2]) ** 2,
+    color="red",
+    )
+
+plt.show()
