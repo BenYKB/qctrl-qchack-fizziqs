@@ -17,11 +17,11 @@ def real_parameters(complex_array):
     return real_array
 
 def complex_parameters(real_array):
-    n = (len(real_array)-1)/4
+    n = int((len(real_array)-1)/4)
     T = real_array[0] + 0j
-    real_part = real_array[1:2*n]
+    real_part = real_array[1:2*n+1]
     imag_part = real_array[2*n+1:]
-    complex_array = np.zeros((2*n+1,))
+    complex_array = np.zeros((2*n+1,), dtype=np.complex128)
 
     complex_array[0] = T
     complex_array[1:] = real_part + 1j*imag_part

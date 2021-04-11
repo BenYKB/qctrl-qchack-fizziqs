@@ -7,10 +7,10 @@ from dotenv import load_dotenv
 from qsim import *
 from scipy_filter import filtering
 from taper_window import planck_taper_window
-from cost import signal_concatenate, generate_patterns, cost_determination
+from cost import signal_concatenate, generate_patterns, cost_determination, complex_parameters
 from initial_pulse import get_initial_pulse
 
-get_initial_pulse()
+# get_initial_pulse()
 
 from qctrl import Qctrl
 
@@ -160,15 +160,15 @@ def simulate_more_realistic_qubit(
 # plot_controls(fig, example_pulse, polar=False)
 # plt.show()
 
-t_min = 20
+t_min = 10
 t_max = 40
 
 
 def duration_from_T(T):
     return (t_min + t_max)/2 + (t_max - t_min) / 2 * T
 N = 18
-test_point_count = 4
-segment_count = 2*N+1
+test_point_count = 2
+segment_count = 2*(2*N)+1
 
 sigma = 0.01
 
@@ -186,7 +186,14 @@ def run_experiments(parameters_set):
 
     rets = []
 
+    set_counter = 0
+
     for parameter in parameter_set:
+        if set_counter == 0:
+            set_counter +=1
+            print(f'first params {parameter}')
+
+        parameter = complex_parameters(parameter)
         #print(parameter)
 
         T = np.real(parameter[0])
@@ -197,13 +204,13 @@ def run_experiments(parameters_set):
 
         duration = duration_from_T(T)
 
-        print(f'current duration: {duration}')
+        #print(f'current duration: {duration}')
 
         #filter
-        print('applying filter')
+        #print('applying filter')
         N_filtered = filtering(gate_N)
         H_filtered = filtering(gate_H)
-        print(N_filtered)
+        #print(N_filtered)
 
         #window
 
@@ -213,15 +220,15 @@ def run_experiments(parameters_set):
         abs_N = np.abs(N_windowed)
         abs_H = np.abs(H_windowed)
 
-        for i in abs_N.size:
+        for i in range(abs_N.size):
             if abs_N[i] > 1:
                 N_windowed[i] = N_windowed[i]/(abs_N[i] +.00001)
 
-        for i in abs_H.size:
+        for i in range(abs_H.size):
             if abs_H[i] > 1:
                 H_windowed[i] = H_windowed[i]/(abs_H[i]+ .00001)
 
-        print(f'done filtering + taper:  {N_windowed}')
+        #print(f'done filtering + taper:  {N_windowed}')
 
         #determine concatenation pattern
         
@@ -239,15 +246,15 @@ def run_experiments(parameters_set):
         for pattern in patterns:
             sig = signal_concatenate(N_windowed, H_windowed, pattern)
             controls.append({"duration":duration*pattern.size, "values": sig})
-            print(f'added control of duration {duration}')
-            print(f'added control vals of lenght {sig.size}')
+            #print(f'added control of duration {duration}')
+            #print(f'added control vals of lenght {sig.size}')
         # Obtain the results of the experiment.
-        print(f"sending shot")
+        #print(f"sending shot")
         experiment_results = qctrl.functions.calculate_qchack_measurements(
             controls=controls,
             shot_count=shot_count,
         )
-        print("done shot")
+        #print("done shot")
 
         measurements = experiment_results.measurements
 
@@ -256,25 +263,41 @@ def run_experiments(parameters_set):
             costs.append(cost_determination(measurements[i], patterns[i]))
         
 
-        rets.append(np.mean(np.abs(costs)))
+        rets.append(5*np.mean(np.abs(costs)))
 
     return rets
 
 
 # Define parameters as a set of controls with piecewise constant segments.
-parameter_set = (
-    (1+0j)
-    * (np.linspace(-1, 1, test_point_count)[:, None])
-    * np.ones((test_point_count, segment_count))
+# parameter_set = (
+#     1.0
+#     * (np.linspace(-1, 1, test_point_count)[:, None])
+#     * np.random.rand(test_point_count, segment_count)
+# )
+
+
+# Guess from Rabi Rate 
+initial_guess = np.concatenate((
+    np.array([-.8]),
+    0.7*np.ones(N),
+    np.zeros(3),0.7*np.ones(6),np.zeros(9),
+    np.zeros(N),
+    -0.7 *np.ones(3), np.zeros(6), np.zeros(9))
 )
+
+random_guess = (np.random.rand(segment_count)-0.5)*1.7
+
+
+parameter_set = np.stack((initial_guess, random_guess))
+
 
 
 print(f'initial parameter set{parameter_set}')
 
 
 bound = qctrl.types.closed_loop_optimization_step.BoxConstraint(
-    lower_bound=1,
-    upper_bound=-1,
+    lower_bound=-1,
+    upper_bound=1,
 )
 
 initializer = qctrl.types.closed_loop_optimization_step.GaussianProcessInitializer(
@@ -345,6 +368,11 @@ while best_cost > 3 * sigma:
     if cost < best_cost:
         best_cost = cost
         best_controls = controls
+
+
+    if optimization_count % 2 == 0:
+        print(f'current best {best_controls} at best cost {best_cost}')
+
 
 # Print final best cost.
 print(f"Infidelity: {best_cost}")
