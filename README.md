@@ -1,2 +1,2 @@
 # qc-hacks-2021
-QcHacks Qtrl Submission
+Q-CTRL QCHacks Challenge fizziqs entry 
