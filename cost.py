@@ -5,23 +5,23 @@ not_gate = np.array([[0,1],[1,0]])
 h_gate = np.array([[1,1],[1,-1]])/np.sqrt(2)
 
 def real_parameters(complex_array):
-    n = (len(complex_array)-1)/2
+    n = (len(complex_array)-1)//2
     real_part = np.real(complex_array)
     imag_part = np.imag(complex_array)
 
     real_array = np.zeros((4*n+1,))
     real_array[0] = real_part[0]
-    real_array[1:2*n] = real_part[1:]
+    real_array[1:2*n+1] = real_part[1:]
     real_array[2*n+1:] = imag_part[1:]
 
     return real_array
 
 def complex_parameters(real_array):
-    n = (len(real_array)-1)/4
+    n = (len(real_array)-1)//4
     T = real_array[0] + 0j
-    real_part = real_array[1:2*n]
+    real_part = real_array[1:2*n+1]
     imag_part = real_array[2*n+1:]
-    complex_array = np.zeros((2*n+1,))
+    complex_array = np.zeros((2*n+1,), dtype=complex)
 
     complex_array[0] = T
     complex_array[1:] = real_part + 1j*imag_part
@@ -59,3 +59,9 @@ def cost_determination(measurement_counts, pattern):
     cost_value = np.abs(probability_of_one_ideal-probablity_of_one_measured)/n
 
     return cost_value
+
+test_complex = np.array([1+0j, 0.2-0.3j, 0+0.9j, 0.3+0.1j, 0.5+0j, 0.4-0.1j, 0.2+0.3j])
+print(test_complex)
+real_test = real_parameters(test_complex)
+print(real_test)
+print(test_complex == complex_parameters(real_test))
