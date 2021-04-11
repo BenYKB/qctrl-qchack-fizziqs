@@ -209,7 +209,218 @@ example_pulse = get_pulse_plot_dict(name='$\Omega$', duration=duration, values=v
 
 
 
-fig = plt.figure()
-plot_controls(fig, example_pulse, polar=False)
-plt.show()
+# fig = plt.figure()
+# plot_controls(fig, example_pulse, polar=False)
+# plt.show()
+
+time_min = 1
+time_max = 10
+
+
+def duration_from_T(T):
+    return (time_min + time_max)/2 + (time_max - time_min) / 2 * T
+
+N = 10  #number of heights to define
+
+parameters = np.random.rand(N+1) 
+
+def signal_from_parameters(parameters):
+    return qctrl.operations.pwc_signal(values=parameters[1:], duration=parameters[0])
+
+def run_qbit(parameters):
+    signal = signal
+
+# microwave_voltage_to_rabi_rate():
+
+
+# rabi_rate_to_microwave():
+
+
+T=1
+cmd_values = np.array([.5+.5j,0+0j,-1j,0.5+0j])
+#print(simulate_more_realistic_qubit(duration=duration_from_T(T), values=cmd_values))
+
+
+
+# def experiment_to_cost()
+
+
+# with qctrl.create_graph as realistic_sim_graph:
+#     X = qctrl.operations.complex_pwc_signal(
+#         moduli=qctrl.operations.bounded_optimization_variable(
+#             count=segment_count,
+#             lower_bound=0,
+#             upper_bound=1,
+#         ),
+#         phases=qctrl.operations.unbounded_optimization_variable(
+#             count=segment_count,
+#             initial_lower_bound=0,
+#             initial_upper_bound=2 * np.pi,
+#         ),
+#         duration=qctrl.bounded_optimization_variable(
+#             count=1,
+#             lower_bound=t_min,
+#             upper_bound=t_max,
+#         ),
+#         name="X",
+#     )
+
+#     cost = qctrl.operations.
+
+N = 10
+test_point_count = 2
+segment_count = 2*N+1
+
+sigma = 0.01
+
+t_min = 10
+t_max = 60
+
+
+# Define the number of test points obtained per run.
+
+
+def cost_function(results, expected_result):
+    return np.count_nonzero(results==expected_result)/results.size
+
+def run_experiments(parameters_set):
+
+    rets = []
+
+    for parameter in parameter_set:
+        print(parameter)
+        T = np.real(parameter[0])
+        gate_N = parameter[1:1+N]
+        gate_H = parameter[1+N:]
+
+        #filter
+        N_filtered = gate_N
+        H_filtered = gate_H
+
+        #window
+
+        N_windowed = N_filtered
+        H_windowed = H_filtered
+
+        together = np.concatenate((N_windowed, H_windowed))
+
+        results = simulate_more_realistic_qubit(duration=duration_from_T(T), values=together)
+        results = results['measurements']
+        expected_result = np.array([0,1]) 
+
+        rets.append(cost_function(results, expected_result))
+    return rets
+
+
+
+
+
+
+
+test_point_count = 2
+
+# Define number of segments in the control.
+segment_count = 10
+
+# Define parameters as a set of controls with piecewise constant segments.
+parameter_set = (
+    (1+0j)
+    * (np.linspace(-1, 1, test_point_count)[:, None])
+    * np.ones((test_point_count, segment_count))
+)
+
+
+print(parameter_set)
+
+
+bound = qctrl.types.closed_loop_optimization_step.BoxConstraint(
+    lower_bound=1,
+    upper_bound=-1,
+)
+
+initializer = qctrl.types.closed_loop_optimization_step.GaussianProcessInitializer(
+    bounds=[bound] * segment_count,
+    rng_seed=0,
+)
+optimizer = qctrl.types.closed_loop_optimization_step.Optimizer(
+    gaussian_process_initializer=initializer,
+)
+
+
+experiment_results = run_experiments(parameter_set)
+
+
+# def get_exp_results(run_parameters):
+#     return simulate_more_realistic_qubit
+
+#xperimental_results = get_exp_results(run_parameters)
+
+best_cost, best_controls = min(zip(experiment_results, parameter_set), key=lambda params:params[0])
+
+
+optimization_count = 0
+
+# Run the optimization loop until the cost (infidelity) is sufficiently small.
+while best_cost > 3 * sigma:
+    # Print the current best cost.
+    optimization_steps = (
+        "optimization step" if optimization_count == 1 else "optimization steps"
+    )
+    print(
+        f"Best infidelity after {optimization_count} BOULDER OPAL {optimization_steps}: {best_cost}"
+    )
+
+    # Organize the experiment results into the proper input format.
+    results = [
+        qctrl.types.closed_loop_optimization_step.CostFunctionResult(
+            parameters=list(parameters),
+            cost=cost,
+            cost_uncertainty=sigma,
+        )
+        for parameters, cost in zip(parameter_set, experiment_results)
+    ]
+
+    # Call the automated closed-loop optimizer and obtain the next set of test points.
+    optimization_result = qctrl.functions.calculate_closed_loop_optimization_step(
+        optimizer=optimizer,
+        results=results,
+        test_point_count=test_point_count,
+    )
+    optimization_count += 1
+
+    # Organize the data returned by the automated closed-loop optimizer.
+    parameter_set = np.array(
+        [test_point.parameters for test_point in optimization_result.test_points]
+    )
+    optimizer = qctrl.types.closed_loop_optimization_step.Optimizer(
+        state=optimization_result.state
+    )
+
+    # Obtain experiment results that the automated closed-loop optimizer requested.
+    experiment_results = run_experiments(parameter_set)
+
+    # Record the best results after this round of experiments.
+    cost, controls = min(
+        zip(experiment_results, parameter_set), key=lambda params: params[0]
+    )
+    if cost < best_cost:
+        best_cost = cost
+        best_controls = controls
+
+# Print final best cost.
+print(f"Infidelity: {best_cost}")
+
+# Plot controls that correspond to the best cost.
+plot_controls(
+    figure=plt.figure(),
+    controls={
+        r"$\Omega(t)$": [
+            {"duration": duration / len(best_controls), "value": value}
+            for value in best_controls
+        ]
+    },
+)
+
+
+
 
