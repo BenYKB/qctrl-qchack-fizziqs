@@ -20,7 +20,9 @@ for k in range(control_count):
     # Create a random string of complex numbers for each controls.
     real_part = np.random.random(size=[segment_count])
     imag_part = np.random.random(size=[segment_count])
+    print(real_part, imag_part)
     values = 0.15 * k * (real_part + 1j * imag_part)
+    print(values)
 
     controls.append({"duration": duration, "values": values})
 

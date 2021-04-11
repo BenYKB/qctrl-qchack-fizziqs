@@ -12,7 +12,6 @@ from scipy.optimize import curve_fit
 
 qctrl = Qctrl(email=os.getenv('EMAIL'), password=os.getenv('PASSWORD'))
 
-
 def estimate_probability_of_one(measurements):
     size = len(measurements)
     probability = np.mean(measurements)
@@ -20,7 +19,7 @@ def estimate_probability_of_one(measurements):
     return probability, standard_error
 
 
-def get_qubit_population(pulse_duration: float, control_count: int = 1, a_i: float = 0, a_q: float = 0) -> List[
+def get_qubit_population(duration: float, control_count: int = 1, ai: float = 0, a_q: float = 0) -> List[
     Tuple[float, float]]:
     """
     Gets the qubit population that corresponds to a certain pulse_duration and pulse (a_i, a_q)
@@ -32,10 +31,10 @@ def get_qubit_population(pulse_duration: float, control_count: int = 1, a_i: flo
     controls = []
     for k in range(control_count):
         # Create a random string of complex numbers for each controls.
-        real_part = np.ones(segment_count) * a_i
+        real_part = np.ones(segment_count) * ai
         imag_part = np.ones(segment_count) * a_q
-        values = 0.15 * k * (real_part + 1j * imag_part)
-        controls.append({"duration": pulse_duration, "values": values})
+        values = real_part + 1j * imag_part
+        controls.append({"duration": duration, "values": values})
 
     # Obtain the results of the experiment.
     experiment_results = qctrl.functions.calculate_qchack_measurements(
@@ -46,7 +45,7 @@ def get_qubit_population(pulse_duration: float, control_count: int = 1, a_i: flo
     qubit_population = []
     experiment_measurements = experiment_results.measurements
     for k, measurement_counts in enumerate(experiment_measurements):
-        # print(f"control #{k}: {measurement_counts}")
+        print(f"control #{k}: {measurement_counts}")
         # print(estimate_probability_of_one(measurement_counts))
         qubit_population.append(estimate_probability_of_one(measurement_counts))
 
@@ -54,15 +53,16 @@ def get_qubit_population(pulse_duration: float, control_count: int = 1, a_i: flo
 
 
 duration_interval = 5
-min_duration = 10
-max_duration = 70
+min_duration = 100
+max_duration = 300
 pulse_durations = np.arange(min_duration, max_duration, duration_interval).tolist()
-a_i = 0.2  # pulse amplitude (real)
+a_i = 0.7  # pulse amplitude (real)
 
 qubit_populations = []
 
 for pulse_duration in pulse_durations:
-    probability, standard_error = get_qubit_population(pulse_duration, control_count=1, a_i=a_i, a_q=0)[0]
+    probability, standard_error = get_qubit_population(pulse_duration, control_count=1, ai=a_i, a_q=0)[0]
+    print(probability, standard_error)
     qubit_populations.append(probability)
 
 plt.plot(pulse_durations, qubit_populations, 'o')
