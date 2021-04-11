@@ -11,12 +11,87 @@ from cost import signal_concatenate, generate_patterns, cost_determination, comp
 from initial_pulse import get_initial_pulse
 
 # get_initial_pulse()
+import jsonpickle
 
 from qctrl import Qctrl
 
 load_dotenv()
 # Starting a session with the API
 qctrl = Qctrl(email=os.getenv('EMAIL'), password=os.getenv('PASS'))
+
+def save_var(file_name, var):
+    # saves a single var to a file using jsonpickle
+    f = open(file_name, "w+")
+    to_write = jsonpickle.encode(var)
+    f.write(to_write)
+    f.close()
+
+def load_var(file_name):
+    # retuns a var from a json file
+    f = open(file_name, "r+")
+    encoded = f.read()
+    decoded = jsonpickle.decode(encoded)
+    f.close()
+    return decoded
+
+def simulate_ideal_qubit(
+    duration=1, values=np.array([np.pi]), shots=1024, repetitions=1
+):
+
+    b = np.array([[0, 1], [0, 0]])  # Lowering operator
+    initial_state = np.array([[1], [0]])  # Initial state of qubit in |0>
+
+    with qctrl.create_graph() as graph:
+
+        # Create time dependent \Omega(t)
+        drive = qctrl.operations.pwc_signal(duration=duration, values=values)
+
+        # Construct Hamiltonian (\Omega(t) b + \Omega^*(t) b^\dagger)/2
+        hamiltonian = qctrl.operations.pwc_operator_hermitian_part(
+            qctrl.operations.pwc_operator(signal=drive, operator=b)
+        )
+
+        # Solve Schrodinger's equation and get total unitary at the end
+        unitary = qctrl.operations.time_evolution_operators_pwc(
+            hamiltonian=hamiltonian,
+            sample_times=np.array([duration]),
+        )[-1]
+        unitary.name = "unitary"
+
+        # Repeat final unitary
+        repeated_unitary = np.eye(2)
+        for _ in range(repetitions):
+            repeated_unitary = repeated_unitary @ unitary
+        repeated_unitary.name = "repeated_unitary"
+
+        # Calculate final state.
+        state = repeated_unitary @ initial_state
+
+        # Calculate final populations.
+        populations = qctrl.operations.abs(state[:, 0]) ** 2
+        # Normalize populations because of numerical precision
+        norm = qctrl.operations.sum(populations)
+        populations = populations / norm
+        populations.name = "populations"
+
+    # Evaluate graph.
+    result = qctrl.functions.calculate_graph(
+        graph=graph,
+        output_node_names=["unitary", "repeated_unitary", "populations"],
+    )
+
+    # Extract outputs.
+    unitary = result.output["unitary"]["value"]
+    repeated_unitary = result.output["repeated_unitary"]["value"]
+    populations = result.output["populations"]["value"]
+
+    # Sample projective measurements.
+    measurements = np.random.choice(2, size=shots, p=populations)
+
+    results = {"unitary": unitary, "measurements": measurements}
+
+    return results
+
 
 def simulate_more_realistic_qubit(
     duration=1, values=np.array([np.pi]), shots=1024, repetitions=1
@@ -172,10 +247,48 @@ segment_count = 2*(2*N)+1
 
 sigma = 0.01
 
-
-
-
 # Define the number of test points obtained per run.
+
+
+def get_controls_from_params(params):
+    parameter = complex_parameters(params)
+    #print(parameter)
+
+    T = np.real(parameter[0])
+
+    gate_N = parameter[1:1+N]
+
+    gate_H = parameter[1+N:]
+
+    duration = duration_from_T(T)
+
+    #print(f'current duration: {duration}')
+
+    #filter
+    #print('applying filter')
+    N_filtered = filtering(gate_N)
+    H_filtered = filtering(gate_H)
+    #print(N_filtered)
+
+    #window
+
+    N_windowed = planck_taper_window(N_filtered)
+    H_windowed = planck_taper_window(H_filtered)
+
+    abs_N = np.abs(N_windowed)
+    abs_H = np.abs(H_windowed)
+
+    for i in range(abs_N.size):
+        if abs_N[i] > 1:
+            N_windowed[i] = N_windowed[i]/(abs_N[i] +.00001)
+
+    for i in range(abs_H.size):
+        if abs_H[i] > 1:
+            H_windowed[i] = H_windowed[i]/(abs_H[i]+ .00001)
+
+
+    return duration, N_windowed, H_windowed
+
 
 
 def cost_function(results, expected_result):
@@ -193,41 +306,8 @@ def run_experiments(parameters_set):
             set_counter +=1
             print(f'first params {parameter}')
 
-        parameter = complex_parameters(parameter)
-        #print(parameter)
 
-        T = np.real(parameter[0])
-
-        gate_N = parameter[1:1+N]
-
-        gate_H = parameter[1+N:]
-
-        duration = duration_from_T(T)
-
-        #print(f'current duration: {duration}')
-
-        #filter
-        #print('applying filter')
-        N_filtered = filtering(gate_N)
-        H_filtered = filtering(gate_H)
-        #print(N_filtered)
-
-        #window
-
-        N_windowed = planck_taper_window(N_filtered)
-        H_windowed = planck_taper_window(H_filtered)
-
-        abs_N = np.abs(N_windowed)
-        abs_H = np.abs(H_windowed)
-
-        for i in range(abs_N.size):
-            if abs_N[i] > 1:
-                N_windowed[i] = N_windowed[i]/(abs_N[i] +.00001)
-
-        for i in range(abs_H.size):
-            if abs_H[i] > 1:
-                H_windowed[i] = H_windowed[i]/(abs_H[i]+ .00001)
-
+        duration, N_windowed, H_windowed = get_controls_from_params(parameter)
         #print(f'done filtering + taper:  {N_windowed}')
 
         #determine concatenation pattern
@@ -359,9 +439,10 @@ while best_cost > 3 * sigma:
     )
 
     # Obtain experiment results that the automated closed-loop optimizer requested.
-    experiment_results = run_experiments(parameter_set)
+    experiment_results= run_experiments(parameter_set)
 
     # Record the best results after this round of experiments.
+
     cost, controls = min(
         zip(experiment_results, parameter_set), key=lambda params: params[0]
     )
@@ -369,24 +450,25 @@ while best_cost > 3 * sigma:
         best_cost = cost
         best_controls = controls
 
+        duration, N_windowed, H_windowed = get_controls_from_params(best_controls)
 
-    if optimization_count % 2 == 0:
-        print(f'current best {best_controls} at best cost {best_cost}')
-
+        save_var("optimization_results/optimization_" + str(optimization_count) + f'_Ngate.json', {"duration":duration, "values": N_windowed})
+        save_var("optimization_results/optimization_" + str(optimization_count) + f'_Hgate.json', {"duration":duration, "values": H_windowed})
+        
 
 # Print final best cost.
 print(f"Infidelity: {best_cost}")
 
-# Plot controls that correspond to the best cost.
-plot_controls(
-    figure=plt.figure(),
-    controls={
-        r"$\Omega(t)$": [
-            {"duration": duration / len(best_controls), "value": value}
-            for value in best_controls
-        ]
-    },
-)
+# # Plot controls that correspond to the best cost.
+# plot_controls(
+#     figure=plt.figure(),
+#     controls={
+#         r"$\Omega(t)$": [
+#             {"duration": duration / len(best_controls), "value": value}
+#             for value in best_controls
+#         ]
+#     },
+# )
 
 
 
