@@ -13,8 +13,8 @@ def signal_concatenate(not_signal, h_signal, pattern):
     return signal
 
 def generate_patterns(n):
-    repeated_array_not = np.zeros((n,))
-    repeated_array_h = np.ones((n,))
+    repeated_array_not = np.zeros((n,), dtype=int)
+    repeated_array_h = np.ones((n,), dtype=int)
     random_array = np.random.randint(0,2,n)
     return (repeated_array_not, repeated_array_h, random_array)
 
@@ -22,7 +22,7 @@ def cost_determination(measurement_counts, pattern):
     '''pattern is an array of 0s and 1s, representing the order of not_signal (0) and h_signal (1) 
     measurement_counts is the object from the measurement list given by qctrl.functions.calculate_qchack_measurements '''
     
-    n = len(pattern)
+    n = pattern.size
     
     gates = [not_gate, h_gate]
     operator = np.array([[1,0],[0,1]])

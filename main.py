@@ -5,71 +5,18 @@ from qctrlvisualizer import plot_controls
 import os
 from dotenv import load_dotenv
 from qsim import *
+from scipy_filter import filtering
+from taper_window import planck_taper_window
+from cost import signal_concatenate, generate_patterns, cost_determination
+from initial_pulse import get_initial_pulse
+
+get_initial_pulse()
 
 from qctrl import Qctrl
 
 load_dotenv()
 # Starting a session with the API
 qctrl = Qctrl(email=os.getenv('EMAIL'), password=os.getenv('PASS'))
-
-def simulate_ideal_qubit(
-    duration=1, values=np.array([np.pi]), shots=1024, repetitions=1
-):
-
-    b = np.array([[0, 1], [0, 0]])  # Lowering operator
-    initial_state = np.array([[1], [0]])  # Initial state of qubit in |0>
-
-    with qctrl.create_graph() as graph:
-
-        # Create time dependent \Omega(t)
-        drive = qctrl.operations.pwc_signal(duration=duration, values=values)
-
-        # Construct Hamiltonian (\Omega(t) b + \Omega^*(t) b^\dagger)/2
-        hamiltonian = qctrl.operations.pwc_operator_hermitian_part(
-            qctrl.operations.pwc_operator(signal=drive, operator=b)
-        )
-
-        # Solve Schrodinger's equation and get total unitary at the end
-        unitary = qctrl.operations.time_evolution_operators_pwc(
-            hamiltonian=hamiltonian,
-            sample_times=np.array([duration]),
-        )[-1]
-        unitary.name = "unitary"
-
-        # Repeat final unitary
-        repeated_unitary = np.eye(2)
-        for _ in range(repetitions):
-            repeated_unitary = repeated_unitary @ unitary
-        repeated_unitary.name = "repeated_unitary"
-
-        # Calculate final state.
-        state = repeated_unitary @ initial_state
-
-        # Calculate final populations.
-        populations = qctrl.operations.abs(state[:, 0]) ** 2
-        # Normalize populations because of numerical precision
-        norm = qctrl.operations.sum(populations)
-        populations = populations / norm
-        populations.name = "populations"
-
-    # Evaluate graph.
-    result = qctrl.functions.calculate_graph(
-        graph=graph,
-        output_node_names=["unitary", "repeated_unitary", "populations"],
-    )
-
-    # Extract outputs.
-    unitary = result.output["unitary"]["value"]
-    repeated_unitary = result.output["repeated_unitary"]["value"]
-    populations = result.output["populations"]["value"]
-
-    # Sample projective measurements.
-    measurements = np.random.choice(2, size=shots, p=populations)
-
-    results = {"unitary": unitary, "measurements": measurements}
-
-    return results
-
 
 def simulate_more_realistic_qubit(
     duration=1, values=np.array([np.pi]), shots=1024, repetitions=1
@@ -185,27 +132,27 @@ def simulate_more_realistic_qubit(
 
 
 
-duration = 10
-values = np.array([-1, 3, 2, 3, -2, -1])
+# duration = 10
+# values = np.array([-1, 3, 2, 3, -2, -1])
 
 
-def get_pulse_plot_dict(name="default", duration=1, values=np.array([1.0])):
-    segments = len(values)
-    segment_durations = duration / segments
-    pulse_plot_dict = {
-        name: [{"duration": segment_durations, "value": v} for v in values]
-    }
-    return pulse_plot_dict
+# def get_pulse_plot_dict(name="default", duration=1, values=np.array([1.0])):
+#     segments = len(values)
+#     segment_durations = duration / segments
+#     pulse_plot_dict = {
+#         name: [{"duration": segment_durations, "value": v} for v in values]
+#     }
+#     return pulse_plot_dict
 
 
-example_pulse = get_pulse_plot_dict(name="$\Omega$", duration=duration, values=values)
+# example_pulse = get_pulse_plot_dict(name="$\Omega$", duration=duration, values=values)
 
 
 
-duration = 10
-values = np.array([-1,5,6,4,-2])
+# duration = 10
+# values = np.array([-1,5,6,4,-2])
 
-example_pulse = get_pulse_plot_dict(name='$\Omega$', duration=duration, values=values)
+# example_pulse = get_pulse_plot_dict(name='$\Omega$', duration=duration, values=values)
 
 
 
@@ -213,68 +160,19 @@ example_pulse = get_pulse_plot_dict(name='$\Omega$', duration=duration, values=v
 # plot_controls(fig, example_pulse, polar=False)
 # plt.show()
 
-time_min = 1
-time_max = 10
+t_min = 20
+t_max = 40
 
 
 def duration_from_T(T):
-    return (time_min + time_max)/2 + (time_max - time_min) / 2 * T
-
-N = 10  #number of heights to define
-
-parameters = np.random.rand(N+1) 
-
-def signal_from_parameters(parameters):
-    return qctrl.operations.pwc_signal(values=parameters[1:], duration=parameters[0])
-
-def run_qbit(parameters):
-    signal = signal
-
-# microwave_voltage_to_rabi_rate():
-
-
-# rabi_rate_to_microwave():
-
-
-T=1
-cmd_values = np.array([.5+.5j,0+0j,-1j,0.5+0j])
-#print(simulate_more_realistic_qubit(duration=duration_from_T(T), values=cmd_values))
-
-
-
-# def experiment_to_cost()
-
-
-# with qctrl.create_graph as realistic_sim_graph:
-#     X = qctrl.operations.complex_pwc_signal(
-#         moduli=qctrl.operations.bounded_optimization_variable(
-#             count=segment_count,
-#             lower_bound=0,
-#             upper_bound=1,
-#         ),
-#         phases=qctrl.operations.unbounded_optimization_variable(
-#             count=segment_count,
-#             initial_lower_bound=0,
-#             initial_upper_bound=2 * np.pi,
-#         ),
-#         duration=qctrl.bounded_optimization_variable(
-#             count=1,
-#             lower_bound=t_min,
-#             upper_bound=t_max,
-#         ),
-#         name="X",
-#     )
-
-#     cost = qctrl.operations.
-
-N = 10
-test_point_count = 2
+    return (t_min + t_max)/2 + (t_max - t_min) / 2 * T
+N = 18
+test_point_count = 4
 segment_count = 2*N+1
 
 sigma = 0.01
 
-t_min = 10
-t_max = 60
+
 
 
 # Define the number of test points obtained per run.
@@ -284,43 +182,84 @@ def cost_function(results, expected_result):
     return np.count_nonzero(results==expected_result)/results.size
 
 def run_experiments(parameters_set):
+    shot_count = 1024
 
     rets = []
 
     for parameter in parameter_set:
-        print(parameter)
+        #print(parameter)
+
         T = np.real(parameter[0])
+
         gate_N = parameter[1:1+N]
+
         gate_H = parameter[1+N:]
 
+        duration = duration_from_T(T)
+
+        print(f'current duration: {duration}')
+
         #filter
-        N_filtered = gate_N
-        H_filtered = gate_H
+        print('applying filter')
+        N_filtered = filtering(gate_N)
+        H_filtered = filtering(gate_H)
+        print(N_filtered)
 
         #window
 
-        N_windowed = N_filtered
-        H_windowed = H_filtered
+        N_windowed = planck_taper_window(N_filtered)
+        H_windowed = planck_taper_window(H_filtered)
 
-        together = np.concatenate((N_windowed, H_windowed))
+        abs_N = np.abs(N_windowed)
+        abs_H = np.abs(H_windowed)
 
-        results = simulate_more_realistic_qubit(duration=duration_from_T(T), values=together)
-        results = results['measurements']
-        expected_result = np.array([0,1]) 
+        for i in abs_N.size:
+            if abs_N[i] > 1:
+                N_windowed[i] = N_windowed[i]/(abs_N[i] +.00001)
 
-        rets.append(cost_function(results, expected_result))
+        for i in abs_H.size:
+            if abs_H[i] > 1:
+                H_windowed[i] = H_windowed[i]/(abs_H[i]+ .00001)
+
+        print(f'done filtering + taper:  {N_windowed}')
+
+        #determine concatenation pattern
+        
+        n = np.random.randint(2,7)
+
+        one_not = np.array([0],dtype=int)
+        one_h = np.array([1],dtype=int)
+        nots, hs, randpattern = generate_patterns(n)
+
+        patterns = [one_not, one_h, nots, hs, randpattern]
+
+        print(f'patterns are {patterns}')
+
+        controls = []
+        for pattern in patterns:
+            sig = signal_concatenate(N_windowed, H_windowed, pattern)
+            controls.append({"duration":duration*pattern.size, "values": sig})
+            print(f'added control of duration {duration}')
+            print(f'added control vals of lenght {sig.size}')
+        # Obtain the results of the experiment.
+        print(f"sending shot")
+        experiment_results = qctrl.functions.calculate_qchack_measurements(
+            controls=controls,
+            shot_count=shot_count,
+        )
+        print("done shot")
+
+        measurements = experiment_results.measurements
+
+        costs = []
+        for i in range(5):
+            costs.append(cost_determination(measurements[i], patterns[i]))
+        
+
+        rets.append(np.mean(np.abs(costs)))
+
     return rets
 
-
-
-
-
-
-
-test_point_count = 2
-
-# Define number of segments in the control.
-segment_count = 10
 
 # Define parameters as a set of controls with piecewise constant segments.
 parameter_set = (
@@ -330,7 +269,7 @@ parameter_set = (
 )
 
 
-print(parameter_set)
+print(f'initial parameter set{parameter_set}')
 
 
 bound = qctrl.types.closed_loop_optimization_step.BoxConstraint(
