@@ -5,12 +5,28 @@ from qctrlvisualizer import plot_controls
 import os
 from dotenv import load_dotenv
 from qsim import *
+import jsonpickle
 
 from qctrl import Qctrl
 
 load_dotenv()
 # Starting a session with the API
 qctrl = Qctrl(email=os.getenv('EMAIL'), password=os.getenv('PASS'))
+
+def save_var(file_name, var):
+    # saves a single var to a file using jsonpickle
+    f = open(file_name, "w+")
+    to_write = jsonpickle.encode(var)
+    f.write(to_write)
+    f.close()
+
+def load_var(file_name):
+    # retuns a var from a json file
+    f = open(file_name, "r+")
+    encoded = f.read()
+    decoded = jsonpickle.decode(encoded)
+    f.close()
+    return decoded
 
 def simulate_ideal_qubit(
     duration=1, values=np.array([np.pi]), shots=1024, repetitions=1
@@ -406,6 +422,9 @@ while best_cost > 3 * sigma:
     if cost < best_cost:
         best_cost = cost
         best_controls = controls
+
+    if optimization_count % 10 == 0:
+        save_var("optimization_results/optimization" + str(optimization_count), [cost, controls])
 
 # Print final best cost.
 print(f"Infidelity: {best_cost}")
