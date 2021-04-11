@@ -56,12 +56,27 @@ def cost_determination(measurement_counts, pattern):
 
     probability_of_one_ideal = np.abs(final_state[1][0])**2
     probablity_of_one_measured = measurement_counts.count(1)/len(measurement_counts)
+    # unique, num = np.unique(measurement_counts,return_counts=True)
+    # probablity_of_one_measured = num[1]/len(measurement_counts)
     cost_value = np.abs(probability_of_one_ideal-probablity_of_one_measured)/n
 
     return cost_value
 
-test_complex = np.array([1+0j, 0.2-0.3j, 0+0.9j, 0.3+0.1j, 0.5+0j, 0.4-0.1j, 0.2+0.3j])
-print(test_complex)
-real_test = real_parameters(test_complex)
-print(real_test)
-print(test_complex == complex_parameters(real_test))
+# pattern = np.array([1,0,1,1,0])
+# measurement = [0,0,1,1,0,2,1,1,0]
+# print(cost_determination(measurement, pattern))
+
+# gates = [not_gate, h_gate]
+# operator = np.array([[1,0],[0,1]])
+# for which in pattern:
+#     operator = gates[which] @ operator
+# final_state = operator @ state_0
+
+# print(final_state)
+
+
+# test_complex = np.array([1+0j, 0.2-0.3j, 0+0.9j, 0.3+0.1j, 0.5+0j, 0.4-0.1j, 0.2+0.3j])
+# print(test_complex)
+# real_test = real_parameters(test_complex)
+# print(real_test)
+# print(test_complex == complex_parameters(real_test))
